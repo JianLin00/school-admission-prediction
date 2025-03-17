@@ -4,7 +4,8 @@
 
 This project analyzes graduate school admissions data to uncover patterns and insights that can help students understand their chances of admission. By leveraging statistical and machine learning techniques, the project predicts admission probabilities and categorizes students into likelihood tiers (high or low). This analysis provides valuable guidance for prospective graduate students seeking to optimize their applications.
 
-👥 Group Members
+# 👥 Group Members
+
 CHUA SZE YAN, KEVIN WONG, TAN JIAN LIN, VETRI A/L THANABALAN, LOW ZI YANG
 
 # 📂 Dataset
