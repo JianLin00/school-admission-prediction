@@ -1,0 +1,1492 @@
+---
+title: "Group_Assignment"
+output:
+  html_document: default
+  pdf_document: default
+date: "2024-12-16"
+---
+
+# Introduction
+The purpose of this project is to analyze a dataset on graduate school admissions to uncover patterns and insights that can aid students in understanding their chances of admission. By leveraging statistical and machine learning techniques, the project aims to predict admission probabilities and categorize students into likelihood tiers (high or  low). This analysis can provide valuable guidance for prospective graduate students seeking to optimize their applications.
+
+# Research Objectives
+(1) To predict graduate school admission probabilities using a regression model based on the factors.
+(2) To classify students into high and low admission chance level categories to develop a classification model that leverages the same factors.
+(3) To identify the key predictors that significantly influence graduate school admission outcomes.
+(4) To evaluate and compare the performance of different regression and classification algorithms in accurately predicting admission outcomes.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+getwd()
+df <- read.csv("./Admission_Predict.csv")
+
+```{r load-data}
+df <- read.csv("Admission_Predict.csv")
+
+# Preview the first few rows of the dataset
+head(df)
+
+```
+```{r data types}
+str(df)
+```
+
+```{r summary information}
+summary(df)
+
+```
+
+
+```{r check-missing-values}
+# Check if there are any missing values in the data frame
+any_missing <- any(is.na(df))
+cat("Are there any missing values in the dataset? ", any_missing, "\n")
+
+# Count the total number of missing values in the dataset
+total_missing <- sum(is.na(df))
+cat("Total number of missing values in the dataset: ", total_missing, "\n")
+
+# Count missing values for each column
+missing_per_column <- colSums(is.na(df))
+cat("Missing values per column:\n")
+print(missing_per_column)
+
+# Display rows with missing values
+rows_with_na <- df[!complete.cases(df), ]
+cat("Rows with missing values:\n")
+print(rows_with_na)
+```
+
+
+
+
+```{r visual to choose mean or median}
+# Ensure the column names are exactly as they appear in your dataset
+# You can check the column names using colnames(df) if you're not sure
+
+# Replace NA values with 0 in 'Statement of Purpose' and 'Letter of Recommendation'
+df$`Statement.of.Purpose`[is.na(df$`Statement.of.Purpose`)] <- 0
+df$`Letter.of.Recommendation`[is.na(df$`Letter.of.Recommendation`)] <- 0
+
+# Check if the missing values have been replaced successfully
+cat("Missing values in 'Statement of Purpose':", sum(is.na(df$`Statement.of.Purpose`)), "\n")
+cat("Missing values in 'Letter of Recommendation':", sum(is.na(df$`Letter.of.Recommendation`)), "\n")
+
+# Visualizations (Histograms and Boxplots) for distribution and to choose mean/median
+
+# SOP Histogram
+hist(df$`Statement.of.Purpose`, 
+     main = "Statement of Purpose (SOP) Distribution", 
+     xlab = "SOP", 
+     col = "lightblue", 
+     border = "black")
+
+# LOR Histogram
+hist(df$`Letter.of.Recommendation`, 
+     main = "Letter of Recommendation (LOR) Distribution", 
+     xlab = "LOR", 
+     col = "lightgreen", 
+     border = "black")
+
+# SOP Boxplot
+boxplot(df$`Statement.of.Purpose`, 
+        main = "Statement of Purpose (SOP) Boxplot", 
+        ylab = "SOP", 
+        col = "lightblue", 
+        border = "blue", 
+        horizontal = TRUE)
+
+# LOR Boxplot
+boxplot(df$`Letter.of.Recommendation`, 
+        main = "Letter of Recommendation (LOR) Boxplot", 
+        ylab = "LOR", 
+        col = "lightgreen", 
+        border = "green", 
+        horizontal = TRUE)
+
+```
+Histogram (First Plot):
+
+The data distribution is slightly skewed to the left with a significant amount of data clustered towards the higher SOP values (3 to 5). There is a small concentration of values at 0, likely due to replacing NA values.
+Boxplot (Second Plot):
+
+The median (thick blue line inside the box) is closer to the center of the interquartile range (IQR), but there is a noticeable outlier at 0.
+The presence of an outlier suggests that the mean might be pulled down due to the replacement of NA values with 0.
+Decision: Median is more appropriate
+Since the mean is sensitive to outliers and skewed data, the median provides a better measure of central tendency in this case.
+The outlier at 0 (from replacing NA) will distort the mean, but the median remains robust.
+If you want a cleaner analysis, consider imputing NA values with a method like the mean or median of non-zero values instead of 0
+
+
+```{r replace 0 value to median}
+# Replace 0 values with the median for specified columns
+df$Statement.of.Purpose[df$Statement.of.Purpose == 0] <- median(df$Statement.of.Purpose[df$Statement.of.Purpose != 0], na.rm = TRUE)
+df$Letter.of.Recommendation[df$Letter.of.Recommendation == 0] <- median(df$Letter.of.Recommendation[df$Letter.of.Recommendation != 0], na.rm = TRUE)
+
+# Display the updated dataframe (first 20 rows)
+head(df, 20)
+
+```
+
+
+```{r}
+head(df, 20)
+
+```
+
+```{r check skewness and negative values}
+# Calculate skewness for each column
+library(e1071)
+
+sop_skewness <- skewness(df$`Statement.of.Purpose`, na.rm = TRUE)
+lor_skewness <- skewness(df$`Letter.of.Recommendation`, na.rm = TRUE)
+gre_skewness <- skewness(df$`GRE.Score`, na.rm = TRUE)
+toefl_skewness <- skewness(df$`TOEFL.Score`, na.rm = TRUE)
+cgpa_skewness <- skewness(df$`CGPA`, na.rm = TRUE)
+admit_skewness <- skewness(df$`Chance.of.Admit`, na.rm = TRUE)
+
+cat("SOP Skewness:", sop_skewness, "\n")
+cat("LOR Skewness:", lor_skewness, "\n")
+cat("GRE Skewness:", gre_skewness, "\n")
+cat("TOEEFL Skewness:", toefl_skewness, "\n")
+cat("CGPA Skewness:", cgpa_skewness, "\n")
+cat("Chance of Admit Skewness:", admit_skewness, "\n")
+
+# Check for negative values in SOP and LOR columns
+sum(df$`Statement.of.Purpose` < 0, na.rm = TRUE)
+sum(df$`Letter.of.Recommendation` < 0, na.rm = TRUE)
+```
+
+
+```{r}
+View(df)
+```
+
+
+```{r rename the columns}
+# Rename columns
+colnames(df)[colnames(df) == "Statement.of.Purpose"] <- "SOP"
+colnames(df)[colnames(df) == "Letter.of.Recommendation"] <- "LOR"
+colnames(df)[colnames(df) == "GRE.Score"] <- "GRE"
+colnames(df)[colnames(df) == "TOEFL.Score"] <- "TOEFL"
+
+# Check the updated column names
+colnames(df)
+
+```
+```{r new columns}
+# Feature Engineering
+# Calculate Total Score (GRE + TOEFL)
+df$Total_Score <- df$GRE + df$TOEFL
+
+# Calculate Research Experience & GPA Interaction
+df$Research_GPA_Interaction <- df$Research * df$CGPA
+
+# Binning Chance of Admit into categorical column
+df$Chance.Level <- ifelse(df$Chance.of.Admit > 0.7, "1", # Class "High"
+                             "0") # Class "Low"
+
+```
+
+Total_Score helps you understand the combined performance of the student in both GRE and TOEFL.
+Research_GPA_Interaction captures the effect of research experience combined with the academic performance (CGPA). This feature could help predict how research experience might influence a student’s chance of admission when combined with their GPA.
+New column Chance.Level is converting continuous variable of chance of admit into a categorical numeric classes(1 for High, 0 for Low) in order to proceed with the classification modeling.
+
+```{r }
+# Remove Serial.No column
+df <- df[, !colnames(df) %in% "Serial.No."]
+df <- df[, c(setdiff(colnames(df), "Chance.of.Admit"), "Chance.of.Admit")]
+
+head(df, 5)
+
+```
+```{r }
+library(dplyr)
+library(e1071)
+library(Hmisc)
+library(corrplot)
+library(ggplot2)
+library(gridExtra)
+library(patchwork)
+
+#EDA
+# Correlation matrix
+# Remove Serial.No column
+df <- df[, !colnames(df) %in% "Serial.No."]
+df <- df[, c(setdiff(colnames(df), "Chance.of.Admit"), "Chance.of.Admit")]
+
+# Compute correlation matrix using Spearman for mixed types
+cor_matrix <- rcorr(as.matrix(df), type = "spearman")
+
+# Extract correlation coefficients
+corr <- cor_matrix$r
+corr
+
+corrplot.mixed(corr,
+               upper = "circle",           # Upper triangle with squares
+               lower = "number",           # Lower triangle with correlation coefficients
+               addgrid.col = "black",      # Add gridlines
+               tl.col = "black",           # Text color
+               tl.cex = 0.6,               # Adjust text size
+               number.cex = 0.6,           # Adjust size of numbers in the lower triangle
+               tl.pos = "lt",              # Rotate text to 45 degrees for better fit
+               title = "Spearman Correlation Matrix", 
+               mar = c(2, 2, 2, 2))
+
+
+```
+
+```{r gre-distributions, fig.width=12, fig.height=6}
+# Distributions for numerical variables
+# GRE
+gre_hist <- ggplot(df, aes(x = GRE)) + 
+  geom_histogram(binwidth = 5, fill = "darkseagreen", color = "black") +
+  labs(title = "Distribution of GRE Scores", x = "GRE", y = "Count")
+
+stats_gre <- summary(df$GRE)
+q1 <- stats_gre["1st Qu."]
+median <- stats_gre["Median"]
+q3 <- stats_gre["3rd Qu."]
+
+gre_box <- ggplot(df, aes(x = factor(1), y = GRE)) + 
+  geom_boxplot(fill = "darkseagreen", width = 0.4) +
+  geom_text(aes(x = 1.4, y = q1, label = paste0("Q1: ", round(q1, 1))), color = "blue") +
+  geom_text(aes(x = 1.4, y = median, label = paste0("Median: ", round(median, 1))), color = "red") +
+  geom_text(aes(x = 1.4, y = q3, label = paste0("Q3: ", round(q3, 1))), color = "darkgreen") +
+  labs(title = "Boxplot of GRE Scores", y = "GRE Scores", x = NULL) +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+grid.arrange(gre_hist, gre_box, ncol = 2)
+
+# TOEFL
+toefl_hist <- ggplot(df, aes(x = TOEFL)) + 
+  geom_histogram(binwidth = 3, fill = "cadetblue2", color = "black") +
+  labs(title = "Distribution of TOEFL Scores", x = "TOEFL", y = "Count")
+
+stats_toefl <- summary(df$TOEFL)
+q1_toefl <- stats_toefl["1st Qu."]
+median_toefl <- stats_toefl["Median"]
+q3_toefl <- stats_toefl["3rd Qu."]
+
+toefl_box <- ggplot(df, aes(x = factor(1), y = TOEFL)) +
+  geom_boxplot(fill = "cadetblue2", width = 0.4) +
+  geom_text(aes(x = 1.3, y = q1_toefl, label = paste0("Q1: ", round(q1_toefl, 1))), color = "blue", hjust = 0) +
+  geom_text(aes(x = 1.3, y = median_toefl, label = paste0("Median: ", round(median_toefl, 1))), color = "red", hjust = 0) +
+  geom_text(aes(x = 1.3, y = q3_toefl, label = paste0("Q3: ", round(q3_toefl, 1))), color = "darkgreen", hjust = 0) +
+  labs(title = "Boxplot of TOEFL Scores", y = "TOEFL", x = NULL) +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+grid.arrange(toefl_hist, toefl_box, ncol = 2)
+
+# CGPA
+cgpa_hist <- ggplot(df, aes(x = CGPA)) + 
+  geom_histogram(binwidth = 0.3, fill = "cyan4", color = "black") +
+  labs(title = "Distribution of CGPA Scores", x = "CGPA", y = "Count")
+
+stats_cgpa <- summary(df$CGPA)
+q1_cgpa <- stats_cgpa["1st Qu."]
+median_cgpa <- stats_cgpa["Median"]
+q3_cgpa <- stats_cgpa["3rd Qu."]
+
+cgpa_box <- ggplot(df, aes(x = factor(1), y = CGPA)) +
+  geom_boxplot(fill = "cyan4", width = 0.3) +
+  geom_text(aes(x = 1.2, y = q1_cgpa, label = paste0("Q1: ", round(q1_cgpa, 2))), color = "blue", hjust = 0) +
+  geom_text(aes(x = 1.2, y = median_cgpa, label = paste0("Median: ", round(median_cgpa, 2))), color = "red", hjust = 0) +
+  geom_text(aes(x = 1.2, y = q3_cgpa, label = paste0("Q3: ", round(q3_cgpa, 2))), color = "darkgreen", hjust = 0) +
+  labs(title = "Boxplot of CGPA", y = "CGPA", x = NULL) +
+  scale_y_continuous(limits = c(6, 10)) +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+grid.arrange(cgpa_hist, cgpa_box, ncol = 2)
+
+
+```
+```{r fig, fig.height = 10, fig.width = 10}
+#Distribution of Categorical variables
+# Proportion of students with research experience
+bar_research <- df %>%
+  count(Research) %>%
+  mutate(color = ifelse(n == max(n), "red", "orange")) # Highlight the highest bar
+
+dist_research<-ggplot(bar_research, aes(x = factor(Research), y = n, fill = color)) + 
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = n), vjust = -0.5, size=3) + # Add count labels
+  scale_fill_identity() + # Use the color column directly
+  labs(
+    title = "Distribution of Students by Research Experience", 
+    x = "Research Experience (0: No, 1: Yes)", 
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 9),
+    axis.title.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.text.x = element_text(size = 8),
+    axis.text.y = element_text(size = 8)
+  )+
+  ylim(0, max(bar_research$n) * 1)
+
+
+# Proportion of students with LOR
+bar_LOR <- df %>%
+  count(LOR) %>%
+  mutate(color = ifelse(n == max(n), "red", "orange")) # Highlight the highest bar
+
+dist_LOR<-ggplot(bar_LOR, aes(x = factor(LOR), y = n, fill = color)) + 
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = n), vjust = -0.5, size=3) + # Add count labels
+  scale_fill_identity() + # Use the color column directly
+  labs(
+    title = "Distribution of Students by Letter of Recommendation Strength (LOR)", 
+    x = "Letter of Recommendation Strength (LOR)", 
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 9),
+    axis.title.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.text.x = element_text(size = 8),
+    axis.text.y = element_text(size = 8)
+  )+
+  ylim(0, max(bar_LOR$n) * 1)
+
+# Proportion of students with SOP
+bar_SOP <- df %>%
+  count(SOP) %>%
+  mutate(color = ifelse(n == max(n), "red", "orange")) # Highlight the highest bar
+
+dist_SOP<-ggplot(bar_SOP, aes(x = factor(SOP), y = n, fill = color)) + 
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = n), vjust = -0.5, size=3) + # Add count labels
+  scale_fill_identity() + # Use the color column directly
+  labs(
+    title = "Distribution of Students by Statement of Purpose Strength (SOP)", 
+    x = "Statement of Purpose Strength (SOP)", 
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 9),
+    axis.title.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.text.x = element_text(size = 8),
+    axis.text.y = element_text(size = 8)
+  )+
+  ylim(0, max(bar_SOP$n) * 1)
+
+# Proportion of students with University Rating
+bar_rating <- df %>%
+  count(University.Rating) %>%
+  mutate(color = ifelse(n == max(n), "red", "orange"))
+
+dist_rating<-ggplot(bar_rating, aes(x = factor(University.Rating), y = n, fill = color)) + 
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = n), vjust = -0.5, size=3) + # Add count labels
+  scale_fill_identity() + # Use the color column directly
+  labs(
+    title = "Distribution of Students by University Rating", 
+    x = "University Rating", 
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 9),
+    axis.title.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.text.x = element_text(size = 8),
+    axis.text.y = element_text(size = 8)
+  )+
+  ylim(0, max(bar_rating$n) * 1)
+
+combined_dist_plot <- (dist_research | dist_LOR) / (dist_SOP | dist_rating)
+combined_dist_plot
+```
+
+
+```{r fig1, fig.height = 7, fig.width = 10}
+# Scatter plots by numerical variables
+# To identify relationships between key predictors and target variable (Chance.of.Admit)
+# GRE vs Chance of Admit
+scatter_gre <- ggplot(df, aes(x = GRE, y = Chance.of.Admit)) + 
+  geom_point() +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "GRE Scores vs Chance of Admit", x = "GRE", y = "Chance of Admit")+
+  theme(
+    plot.title = element_text(size = 9),
+    axis.title.x = element_text(size = 9),
+    axis.title.y = element_text(size = 9)
+  )
+
+# TOEFL Scores vs Chance of Admit
+scatter_toefl <- ggplot(df, aes(x = TOEFL, y = Chance.of.Admit)) + 
+  geom_point() +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "TOEFL Scores vs Chance of Admit", x = "TOEFL", y = "Chance of Admit")+
+    theme(
+    plot.title = element_text(size = 9),
+    axis.title.x = element_text(size = 9),
+    axis.title.y = element_text(size = 9)
+  )
+
+# CGPA vs Chance of Admit
+scatter_cgpa <- ggplot(df, aes(x = CGPA, y = Chance.of.Admit)) + 
+  geom_point() +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "CGPA vs Chance of Admit", x = "CGPA", y = "Chance of Admit")+
+    theme(
+    plot.title = element_text(size = 9),
+    axis.title.x = element_text(size = 9),
+    axis.title.y = element_text(size = 9)
+  )
+
+combined_scatter <- scatter_gre + scatter_toefl + scatter_cgpa + 
+  plot_layout(ncol = 3)
+combined_scatter
+```
+
+
+```{r }
+# Boxplot by categorical variable
+# University Rating vs Chance of Admit
+quartiles_by_uni_rating <- df %>%
+  group_by(University.Rating) %>%
+  summarise(
+    Q1 = quantile(Chance.of.Admit, 0.25),
+    Median = median(Chance.of.Admit),
+    Q3 = quantile(Chance.of.Admit, 0.75))
+
+quartiles_by_uni_rating
+
+ggplot(df, aes(x = factor(University.Rating), y = Chance.of.Admit)) + 
+  geom_boxplot(fill = "burlywood1") +
+  labs(title = "University Rating vs Chance of Admit", x = "University Rating", y = "Chance of Admit")
+
+# Research vs Chance of Admit
+quartiles_by_research <- df %>%
+  group_by(Research) %>%
+  summarise(
+    Q1 = quantile(Chance.of.Admit, 0.25),
+    Median = median(Chance.of.Admit),
+    Q3 = quantile(Chance.of.Admit, 0.75))
+
+quartiles_by_research
+
+ggplot(df, aes(x = factor(Research), y = Chance.of.Admit)) + 
+  geom_boxplot(fill = "lightpink") +
+  labs(title = "Research vs Chance of Admit", x = "Research Experience (0: No, 1: Yes)", y = "Chance of Admit")
+
+# SOP vs Chance of Admit
+quartiles_by_SOP <- df %>%
+  group_by(SOP) %>%
+  summarise(
+    Q1 = quantile(Chance.of.Admit, 0.25),
+    Median = median(Chance.of.Admit),
+    Q3 = quantile(Chance.of.Admit, 0.75))
+
+quartiles_by_SOP
+
+ggplot(df, aes(x = factor(SOP), y = Chance.of.Admit)) + 
+  geom_boxplot(fill = "darksalmon") +
+  labs(title = "Statement of Purpose vs Chance of Admit", x = "Statement of Purpose Strength", y = "Chance of Admit")
+
+# LOR vs Chance of Admit
+quartiles_by_LOR <- df %>%
+  group_by(LOR) %>%
+  summarise(
+    Q1 = quantile(Chance.of.Admit, 0.25),
+    Median = median(Chance.of.Admit),
+    Q3 = quantile(Chance.of.Admit, 0.75))
+
+quartiles_by_LOR
+
+ggplot(df, aes(x = factor(LOR), y = Chance.of.Admit)) + 
+  geom_boxplot(fill = "cornsilk") +
+  labs(title = "Letter of Recommendation Strength vs Chance of Admit", x = "Letter of Recommendation Strength", y = "Chance of Admit")
+
+```
+Feature Selection For Regression
+Correlation scores for Chance.Of.Admit:
+University.Rating: 0.732 
+SOP:0.691 
+LOR: 0.640
+CGPA: 0.878
+Research: 0.582
+Total_Score: 0.839
+
+Feature Selection For Classification 
+Correlation scores for Chance.Level:
+University.Rating: 0.5863705
+SOP: 0.5424313
+LOR: 0.5179281
+CGPA: 0.6990713
+Research: 0.5033846
+Total_Score: 0.6894465
+
+Chance.Level is a categorical variable derived from Chance.of.Admit. When converting continuous data like Chance.of.Admit into categorical bins (such as "1", "2", "3"), the relationship between individual features and the new target (Chance.Level) becomes less precise. The values in Chance.Level now represent broader categories, which naturally reduces the correlation.
+
+```{r}
+# Drop the unwanted features for classification
+dfc <- df[, !(names(df) %in% c("GRE", "TOEFL", "Research_GPA_Interaction","Chance.of.Admit"))]
+
+# Drop the unwanted features for regression
+dfr <- df[, !(names(df) %in% c("GRE", "TOEFL", "Research_GPA_Interaction","Chance.Level"))]
+
+```
+Dropping the GRE and TOEFL because we have the Total_Score column, which combines these two.
+Dropping the Research_GPA_Interaction due to many 0 values (as Research is binary and can lead to a lot of 0 values).
+
+```{r check the data is imbalanced and skewed or not}
+skewness(df$Chance.of.Admit)
+
+table(df$Chance.Level)
+```
+Since the skewness value of -0.3508017 indicates only a slight left-skew, it's likely not severe enough to require immediate resampling or transformation.
+The classes are fairly close to each other, with class 1 having 235 entries and class 0 having 165 entries. The difference of 70 instances is not large, so this isn't considered a significant imbalance.
+
+```{r Modelling}
+library(caret) 
+
+# Split the dataset into training and test sets (80-20 split)
+set.seed(123)  # Ensures reproducibility
+split.index <- createDataPartition(dfc$Chance.Level, p = 0.8, list = FALSE) #target column is 'Chance.Level'
+# Create the training set (80% of the data)
+train.data <- dfc[split.index, ]
+
+# Create the test set (remaining 20% of the data)
+test.data <- dfc[-split.index, ]
+
+# Check the distribution of the target variable in both sets to ensure proper splitting
+table(train.data$Chance.Level)
+table(test.data$Chance.Level)
+
+# Convert Chance.Level to factor for classification
+train.data$Chance.Level <- factor(train.data$Chance.Level, levels = c("1", "0"), labels = c("HighChance", "LowChance"))
+test.data$Chance.Level <- factor(test.data$Chance.Level, levels = c("1", "0"), labels = c("HighChance", "LowChance"))
+```
+
+```{r Classification Modelling}
+library(randomForest)
+
+#Fit the Random Forest Model
+model_rf <- randomForest(Chance.Level ~ ., data = train.data)
+
+# Print the model to see the results
+print(model_rf)
+
+# Make predictions on the test set
+predictions_rf <- predict(model_rf, newdata = test.data)
+
+# Confusion matrix to evaluate the model
+conf_matrix_rf <- confusionMatrix(predictions_rf, test.data$Chance.Level)
+print(conf_matrix_rf)
+
+```
+```{r Improving the Model}
+# k-fold
+train_control <- trainControl(method="cv", number=10, classProbs = TRUE)
+model_rf1 <- train(Chance.Level~., data=train.data, trControl=train_control, method="rf")
+
+# repeated K Fold
+train_control <- trainControl(method="repeatedcv", number=10, repeats=3, classProbs = TRUE)
+model_rf2 <- train(Chance.Level~., data=train.data, trControl=train_control, method="rf")
+
+# Leave one out CV
+train_control <- trainControl(method="LOOCV", classProbs = TRUE)
+model_rf3 <- train(Chance.Level~., data=train.data, trControl=train_control, method="rf")
+
+# bootstrap
+train_control <- trainControl(method="boot", number=100, classProbs = TRUE)
+model_rf4 <- train(Chance.Level~., data=train.data, trControl=train_control, method="rf")
+```
+
+```{r}
+# Extract performance metrics for each model
+results <- data.frame(
+  Model = c("k-fold", "Repeated k-fold", "LOOCV", "Bootstrap"),
+  Accuracy = c(
+    max(model_rf1$results$Accuracy),  
+    max(model_rf2$results$Accuracy), 
+    max(model_rf3$results$Accuracy),  
+    max(model_rf4$results$Accuracy)   
+  ),
+  Kappa = c(
+    max(model_rf1$results$Kappa),     
+    max(model_rf2$results$Kappa),     
+    max(model_rf3$results$Kappa),     
+    max(model_rf4$results$Kappa)      
+  )
+)
+
+# Print the comparison table
+print(results)
+
+# Identify the best model based on highest accuracy
+best_model_index <- which.max(results$Accuracy)
+best_model <- results$Model[best_model_index]
+print(paste("The best model is:", best_model))
+```
+
+```{r}
+# Extract Random Forest Model from k-fold
+rf_model <- model_rf1$finalModel
+
+# Random Forest Feature Importance
+feature_importance_rf <- importance(rf_model)
+
+# Convert to data frame and prepare for visualization
+importance_df_rf <- as.data.frame(feature_importance_rf)
+importance_df_rf$Feature <- rownames(importance_df_rf)
+
+# Sort by Mean Decrease Gini
+importance_df_rf <- importance_df_rf[order(importance_df_rf$MeanDecreaseGini, decreasing = TRUE), ]
+
+# Visualize Random Forest Feature Importance
+library(ggplot2)
+ggplot(importance_df_rf, aes(x = reorder(Feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  coord_flip() +
+  labs(title = "Feature Importance for Random Forest Model", x = "Feature", y = "Importance (Mean Decrease Gini)") +
+  theme_minimal()
+```
+Mean Decrease Gini (or Mean Decrease Accuracy) is used for calculating feature importance in Random Forest model trained using Repeated k-fold CV. CGPA and Total Score are the most important feature.
+
+
+```{r}
+library(pROC)
+
+# Make predictions using the trained Random Forest model on the test set
+predictions_rf <- predict(rf_model, newdata = test.data)
+
+# Confusion Matrix for Random Forest
+conf_matrix_rf <- confusionMatrix(predictions_rf, test.data$Chance.Level)
+
+# Extract metrics from the confusion matrix
+accuracy_rf <- conf_matrix_rf$overall['Accuracy']
+precision_rf <- posPredValue(predictions_rf, test.data$Chance.Level)
+recall_rf <- sensitivity(predictions_rf, test.data$Chance.Level)
+f1_rf <- (2 * precision_rf * recall_rf) / (precision_rf + recall_rf)
+
+# Calculate AUC (Area Under the ROC Curve)
+# Convert test.data$Chance.Level to numeric for AUC calculation
+roc_curve <- roc(as.numeric(test.data$Chance.Level), as.numeric(predictions_rf))
+auc_rf <- auc(roc_curve)
+
+# Create a data frame to store the metrics
+results_rf <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score", "AUC"),
+  Random_Forest = c(as.numeric(accuracy_rf), as.numeric(precision_rf), 
+                    as.numeric(recall_rf), as.numeric(f1_rf), as.numeric(auc_rf))
+)
+
+# Print the results
+print(results_rf)
+```
+
+```{r}
+# Fit Logistic Regression model
+model_lr <- train(Chance.Level ~ ., data = train.data) 
+
+# Print the model summary
+print(model_lr)
+
+# Make predictions on the test set
+predictions_lr <- predict(model_lr, newdata = test.data)
+
+# Evaluate performance with a confusion matrix
+conf_matrix_lr <- confusionMatrix(predictions_lr, test.data$Chance.Level)
+print(conf_matrix_lr)
+```
+
+```{r}
+# k-fold
+train_control <- trainControl(method="cv", number=10)
+model_lr1 <- train(Chance.Level~., data=train.data, trControl=train_control, method="glm")
+
+# repeated K Fold
+train_control <- trainControl(method="repeatedcv", number=10, repeats=3)
+model_lr2 <- train(Chance.Level~., data=train.data, trControl=train_control, method="glm")
+
+# Leave one out CV
+train_control <- trainControl(method="LOOCV")
+model_lr3 <- train(Chance.Level~., data=train.data, trControl=train_control, method="glm")
+
+# bootstrap
+train_control <- trainControl(method="boot", number=100)
+model_lr4 <- train(Chance.Level~., data=train.data, trControl=train_control, method="glm")
+```
+
+```{r}
+# Extract performance metrics for each model
+results <- data.frame(
+  Model = c("k-fold", "Repeated k-fold", "LOOCV", "Bootstrap"),
+  Accuracy = c(
+    max(model_lr1$results$Accuracy),  
+    max(model_lr2$results$Accuracy), 
+    max(model_lr3$results$Accuracy),  
+    max(model_lr4$results$Accuracy)   
+  ),
+  Kappa = c(
+    max(model_lr1$results$Kappa),     
+    max(model_lr2$results$Kappa),     
+    max(model_lr3$results$Kappa),     
+    max(model_lr4$results$Kappa)      
+  )
+)
+
+# Print the comparison table
+print(results)
+
+# Identify the best model based on highest accuracy
+best_model_index <- which.max(results$Accuracy)
+best_model <- results$Model[best_model_index]
+print(paste("The best model is:", best_model))
+```
+
+```{r}
+# Extract Logistic Regression Model from LOOCV
+lr_model <- model_rf3$finalModel
+
+# Extract Feature Importance using varImp from the caret package
+importance_lr <- varImp(model_lr, scale = FALSE)
+
+# Check the structure of the importance object
+print(str(importance_lr))
+
+# Convert the importance object to a data frame for visualization
+importance_df_lr <- as.data.frame(importance_lr$importance)
+importance_df_lr$Feature <- rownames(importance_df_lr)
+
+# Sort by importance value (descending)
+importance_df_lr <- importance_df_lr[order(importance_df_lr$Overall, decreasing = TRUE), ]
+
+# Check the structure and data
+print(str(importance_df_lr))
+print(head(importance_df_lr))
+
+# Visualize the feature importance using ggplot
+ggplot(importance_df_lr, aes(x = reorder(Feature, Overall), y = Overall)) +
+  geom_bar(stat = "identity", fill = "lightgreen") +
+  coord_flip() +
+  labs(title = "Feature Importance for Logistic Regression Model", 
+       x = "Feature", y = "Importance (Overall)") +
+  theme_minimal()
+```
+The varImp() function from the caret package is designed to extract feature importance directly from a trained model like logistic regression. CGPA and Total_Score shows the highest importance.
+
+```{r}
+# Make predictions using the trained Logistic Regression model on the test set
+predictions_lr <- predict(lr_model, newdata = test.data)
+
+# Logistic Regression Metrics
+conf_matrix_lr <- confusionMatrix(predictions_lr, test.data$Chance.Level)
+accuracy_lr <- conf_matrix_lr$overall['Accuracy']
+precision_lr <- posPredValue(predictions_lr, test.data$Chance.Level)
+recall_lr <- sensitivity(predictions_lr, test.data$Chance.Level)
+f1_lr <- (2 * precision_lr * recall_lr) / (precision_lr + recall_lr)
+
+# Calculate AUC (Area Under the ROC Curve)
+# Convert test.data$Chance.Level to numeric for AUC calculation
+roc_curve <- roc(as.numeric(test.data$Chance.Level), as.numeric(predictions_lr))
+auc_lr <- auc(roc_curve)
+
+results_lr <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score", "AUC"),
+  Logistic_Regression = c(as.numeric(accuracy_lr), as.numeric(precision_lr), 
+                        as.numeric(recall_lr), as.numeric(f1_lr), as.numeric(auc_lr))
+)
+
+# Print the results
+print(results_lr)
+```
+```{r}
+# Fit the SVM model
+model_svm <- svm(Chance.Level ~ ., data = train.data, probability = TRUE)
+
+# Print the model summary
+print(model_svm)
+
+# Make predictions on the test set
+predictions_svm <- predict(model_svm, newdata = test.data)
+prob_predictions <- attr(predict(model_svm, test.data, probability = TRUE), "probabilities")[, 2]
+
+# Evaluate performance with a confusion matrix
+conf_matrix_svm <- confusionMatrix(predictions_svm, test.data$Chance.Level)
+print(conf_matrix_svm)
+```
+
+```{r}
+# k-fold
+train_control <- trainControl(method="cv", number=10)
+model_svm1 <- train(Chance.Level~., data=train.data, trControl=train_control, method="svmRadial")
+
+# repeated K Fold
+train_control <- trainControl(method="repeatedcv", number=10, repeats=3)
+model_svm2 <- train(Chance.Level~., data=train.data, trControl=train_control, method="svmRadial")
+
+# Leave one out CV
+train_control <- trainControl(method="LOOCV")
+model_svm3 <- train(Chance.Level~., data=train.data, trControl=train_control, method="svmRadial")
+
+# bootstrap
+train_control <- trainControl(method="boot", number=100)
+model_svm4 <- train(Chance.Level~., data=train.data, trControl=train_control, method="svmRadial")
+```
+
+```{r}
+# Extract performance metrics for each model
+results <- data.frame(
+  Model = c("k-fold", "Repeated k-fold", "LOOCV", "Bootstrap"),
+  Accuracy = c(
+    max(model_svm1$results$Accuracy),  
+    max(model_svm2$results$Accuracy), 
+    max(model_svm3$results$Accuracy),  
+    max(model_svm4$results$Accuracy)   
+  ),
+  Kappa = c(
+    max(model_svm1$results$Kappa),     
+    max(model_svm2$results$Kappa),     
+    max(model_svm3$results$Kappa),     
+    max(model_svm4$results$Kappa)      
+  )
+)
+
+# Print the comparison table
+print(results)
+
+# Identify the best model based on highest accuracy
+best_model_index <- which.max(results$Accuracy)
+best_model <- results$Model[best_model_index]
+print(paste("The best model is:", best_model))
+```
+
+```{r}
+# Extract Logistic Regression Model from LOOCV
+svm_model <- model_svm3$finalModel
+
+# performance function to calculate accuracy
+performance_function <- function(model, data, labels) {
+  predictions <- predict(model, newdata = data)
+  accuracy <- sum(predictions == labels) / length(labels)
+  return(accuracy)
+}
+
+# SVM Permutation Feature Importance
+importance_scores_svm <- numeric(ncol(train.data) - 1)
+for (i in 1:(ncol(train.data) - 1)) {
+  shuffled_data <- train.data
+  shuffled_data[, i] <- sample(shuffled_data[, i])
+  baseline_accuracy <- performance_function(model_svm, train.data, train.data$Chance.Level)
+  shuffled_accuracy <- performance_function(model_svm, shuffled_data, shuffled_data$Chance.Level)
+  importance_scores_svm[i] <- baseline_accuracy - shuffled_accuracy
+}
+importance_df_svm <- data.frame(Feature = names(train.data)[-ncol(train.data)], Importance = importance_scores_svm)
+importance_df_svm <- importance_df_svm[order(importance_df_svm$Importance, decreasing = TRUE), ]
+
+# Visualize SVM Feature Importance
+ggplot(importance_df_svm, aes(x = reorder(Feature, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "orange") +
+  coord_flip() +
+  labs(title = "Feature Importance for SVM Model", x = "Feature", y = "Importance (Decrease in Accuracy)") +
+  theme_minimal()
+```
+Since SVM does not inherently provide a way to rank feature importance, permutation importance is used as a model-agnostic method to estimate the effect of each feature on model performance. Total_Score amd CGPA is still having the highest effect on the model.
+
+```{r}
+library(kernlab)
+
+# SVM created with train function is different
+test.data_no_target <- test.data[, -which(names(test.data) == "Chance.Level")]
+
+# Make predictions using the trained SVM model on the test set
+predictions_svm <- predict(svm_model, newdata = test.data_no_target)
+
+# SVM Metrics
+conf_matrix_svm <- confusionMatrix(predictions_svm, test.data$Chance.Level)
+accuracy_svm <- conf_matrix_svm$overall['Accuracy']
+precision_svm <- posPredValue(predictions_svm, test.data$Chance.Level)
+recall_svm <- sensitivity(predictions_svm, test.data$Chance.Level)
+f1_svm <- (2 * precision_svm * recall_svm) / (precision_svm + recall_svm)
+
+# Calculate AUC (Area Under the ROC Curve)
+# Convert test.data$Chance.Level to numeric for AUC calculation
+roc_curve <- roc(as.numeric(test.data$Chance.Level), as.numeric(predictions_svm))
+auc_svm <- auc(roc_curve)
+
+results_svm <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score", "AUC"),
+  SVM = c(as.numeric(accuracy_svm), as.numeric(precision_svm), 
+                        as.numeric(recall_svm), as.numeric(f1_svm), as.numeric(auc_svm))
+)
+
+# Print the results
+print(results_svm)
+```
+
+```{r}
+library(class)
+# Fit k-NN model
+predictions_knn <- knn(train = train.data[, -ncol(train.data)], 
+                       test = test.data[, -ncol(test.data)], 
+                       cl = train.data$Chance.Level 
+                       )
+
+# Evaluate performance with a confusion matrix
+conf_matrix_knn <- confusionMatrix(predictions_knn, test.data$Chance.Level)
+print(conf_matrix_knn)
+```
+
+```{r}
+# k-fold
+train_control <- trainControl(method="cv", number=10)
+model_knn1 <- train(Chance.Level~., data=train.data, trControl=train_control, method="knn")
+
+# repeated K Fold
+train_control <- trainControl(method="repeatedcv", number=10, repeats=3)
+model_knn2 <- train(Chance.Level~., data=train.data, trControl=train_control, method="knn")
+
+# Leave one out CV
+train_control <- trainControl(method="LOOCV")
+model_knn3 <- train(Chance.Level~., data=train.data, trControl=train_control, method="knn")
+
+# bootstrap
+train_control <- trainControl(method="boot", number=100)
+model_knn4 <- train(Chance.Level~., data=train.data, trControl=train_control, method="knn")
+```
+
+```{r}
+# Extract performance metrics for each model
+results <- data.frame(
+  Model = c("k-fold", "Repeated k-fold", "LOOCV", "Bootstrap"),
+  Accuracy = c(
+    max(model_knn1$results$Accuracy),  
+    max(model_knn2$results$Accuracy), 
+    max(model_knn3$results$Accuracy),  
+    max(model_knn4$results$Accuracy)   
+  ),
+  Kappa = c(
+    max(model_knn1$results$Kappa),     
+    max(model_knn2$results$Kappa),     
+    max(model_knn3$results$Kappa),     
+    max(model_knn4$results$Kappa)      
+  )
+)
+
+# Print the comparison table
+print(results)
+
+# Identify the best model based on highest accuracy
+best_model_index <- which.max(results$Accuracy)
+best_model <- results$Model[best_model_index]
+print(paste("The best model is:", best_model))
+```
+
+```{r}
+# Extract K-Nearest Neighbour Model from LOOCV
+knn_model <- model_knn3$finalModel
+
+# Calculate feature importance using varImp()
+importance_knn <- varImp(model_knn3, scale = FALSE)
+
+# Print the importance of each feature
+print(importance_knn)
+
+# Visualize the importance using ggplot2
+library(ggplot2)
+ggplot(importance_knn, aes(x = reorder(Features, Overall), y = Overall)) +
+  geom_bar(stat = "identity", fill = "lightblue") +
+  coord_flip() +
+  labs(title = "Feature Importance for k-NN Model", x = "Feature", y = "Importance (Decrease in Accuracy)") +
+  theme_minimal()
+```
+Unlike other models, k-Nearest Neighbors (kNN) doesn't explicitly model feature importance. It makes predictions based on the majority class of the nearest neighbors, so it doesn’t produce direct feature importance scores. As a result, the feature importance values might seem to be quite similar, as they are not derived from a model that inherently ranks features.
+
+```{r}
+# KNN created with train function is different
+test.data_no_target <- test.data[, -which(names(test.data) == "Chance.Level")]
+
+# Make predictions using the trained KNN model on the test set
+predictions_knn <- predict(knn_model, newdata = test.data_no_target, type = "class")
+
+# KNN Metrics
+conf_matrix_knn <- confusionMatrix(predictions_knn, test.data$Chance.Level)
+accuracy_knn <- conf_matrix_knn$overall['Accuracy']
+precision_knn <- posPredValue(predictions_knn, test.data$Chance.Level)
+recall_knn <- sensitivity(predictions_knn, test.data$Chance.Level)
+f1_knn <- (2 * precision_knn * recall_knn) / (precision_knn + recall_knn)
+
+# Calculate AUC (Area Under the ROC Curve)
+# Convert test.data$Chance.Level to numeric for AUC calculation
+roc_curve <- roc(as.numeric(test.data$Chance.Level), as.numeric(predictions_knn))
+auc_knn <- auc(roc_curve)
+
+results_knn <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score", "AUC"),
+  kNN = c(as.numeric(accuracy_knn), as.numeric(precision_knn), 
+                        as.numeric(recall_knn), as.numeric(f1_knn), as.numeric(auc_knn))
+)
+
+# Print the results
+print(results_knn)
+```
+
+```{r}
+# Create a summary data frame
+results <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score", "AUC"),
+  Random_Forest = c(accuracy_rf, precision_rf, recall_rf, f1_rf, auc_rf),
+  Logistic_Regression = c(accuracy_lr, precision_lr, recall_lr, f1_lr, auc_lr),
+  SVM = c(accuracy_svm, precision_svm, recall_svm, f1_svm, auc_svm),
+  kNN = c(accuracy_knn, precision_knn, recall_knn, f1_knn, auc_knn)
+)
+
+# Print the results table
+print(results)
+```
+
+```{r}
+library(tidyr)
+
+# Reshape the data into a long format for ggplot
+metrics_long_df <- results %>%
+  pivot_longer(cols = -Metric, names_to = "Model", values_to = "Value")
+
+# Visualize the metrics with ggplot
+ggplot(metrics_long_df, aes(x = Metric, y = Value, fill = Model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Model Performance Comparison", x = "Metric", y = "Score") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+SVM with Leave-one-out cross-validation (LOOCV) is the best model in terms of all metrics, making it the most effective for distinguishing between classes and capturing positives.
+
+
+
+
+
+
+
+Regression Models for Continuous Variables
+# Split the dataset
+```{r}
+# Split the dataset into training and test sets (80-20 split)
+set.seed(123)  # Ensures reproducibility
+split.index <- createDataPartition(dfr$Chance.of.Admit, p = 0.8, list = FALSE) #target column is 'Chance.of.Admit'
+# Create the training set (80% of the data)
+train_data <- dfr[split.index, ]
+
+# Create the test set (remaining 20% of the data)
+test_data <- dfr[-split.index, ]
+```
+
+# Random Forest Model
+# (1) K-fold
+```{r}
+library(randomForest)
+# k-fold
+train_control <- trainControl(method="cv", number=10)
+model_rfa <- train(Chance.of.Admit~., data=train_data, trControl=train_control, method="rf")
+
+# repeated K Fold
+train_control <- trainControl(method="repeatedcv", number=10, repeats=3)
+model_rfb <- train(Chance.of.Admit~., data=train_data, trControl=train_control, method="rf")
+
+# Leave one out CV
+train_control <- trainControl(method="LOOCV")
+model_rfc <- train(Chance.of.Admit~., data=train_data, trControl=train_control, method="rf")
+
+# bootstrap
+train_control <- trainControl(method="boot", number=100)
+model_rfd <- train(Chance.of.Admit~., data=train_data, trControl=train_control, method="rf")
+```
+
+# (2) Performance Metrics Comparison between K-fold & Choose the best model (Print Out)
+```{r}
+# Compare Performance Metrics
+results <- data.frame(
+  Model = c("k-fold", "Repeated k-fold", "LOOCV", "Bootstrap"),
+  RMSE = c(
+    min(model_rfa$results$RMSE), 
+    min(model_rfb$results$RMSE), 
+    min(model_rfc$results$RMSE), 
+    min(model_rfd$results$RMSE)
+  ),
+  Rsquared = c(
+    max(model_rfa$results$Rsquared), 
+    max(model_rfb$results$Rsquared), 
+    max(model_rfc$results$Rsquared), 
+    max(model_rfd$results$Rsquared)
+  )
+)
+
+# Print results table
+print(results)
+
+# Identify the best model
+best_model_index <- which.min(results$RMSE)
+best_model <- results$Model[best_model_index]
+print(paste("The best model is:", best_model))
+```
+
+# (3) Input the best model (Print Out) and Visualize the feature importance of the best model
+```{r}
+# Feature Importance for the Best Model 
+rf_model <- model_rfb$finalModel
+importance_rf <- varImp(model_rfb, scale = FALSE)
+print(importance_rf)
+
+# Visualize Feature Importance
+ggplot(importance_rf, aes(x = reorder(Variables, Overall), y = Overall)) +
+  geom_bar(stat = "identity", fill = "lightgreen") +
+  coord_flip() +
+  labs(title = "Feature Importance for Random Forest Model", 
+       x = "Feature", y = "Importance") +
+  theme_minimal()
+```
+
+```{r}
+install.packages("randomForest")
+library(randomForest)
+# Ensure predictions and target are numeric vectors
+predictions_rf <- predict(rf_model, newdata = test_data)
+target_rf <- as.numeric(test_data$Chance.of.Admit)
+
+# Calculate Metrics
+rmse_rf <- RMSE(predictions_rf, target_rf)
+mae_rf <- MAE(predictions_rf, target_rf)
+rsquared_rf <- cor(predictions_rf, target_rf)^2  
+
+# Summarize Results
+results_rf <- data.frame(
+  Metric = c("RMSE", "MAE", "R^2"),
+  Random_Forest = c(rmse_rf, mae_rf, rsquared_rf)
+)
+
+# Print Results
+print(results_lm)
+```
+
+
+# Linear Regression Model
+```{r}
+# k-fold
+train_control <- trainControl(method="cv", number=10)
+model_lm1 <- train(Chance.of.Admit~., data=train_data, trControl=train_control, method="lm")
+
+# repeated K Fold
+train_control <- trainControl(method="repeatedcv", number=10, repeats=3)
+model_lm2 <- train(Chance.of.Admit~., data=train_data, trControl=train_control, method="lm")
+
+# Leave one out CV
+train_control <- trainControl(method="LOOCV")
+model_lm3 <- train(Chance.of.Admit~., data=train_data, trControl=train_control, method="lm")
+
+# bootstrap
+train_control <- trainControl(method="boot", number=100)
+model_lm4 <- train(Chance.of.Admit~., data=train_data, trControl=train_control, method="lm")
+```
+
+```{r}
+# Compare Performance Metrics
+results <- data.frame(
+  Model = c("k-fold", "Repeated k-fold", "LOOCV", "Bootstrap"),
+  RMSE = c(
+    min(model_lm1$results$RMSE), 
+    min(model_lm2$results$RMSE), 
+    min(model_lm3$results$RMSE), 
+    min(model_lm4$results$RMSE)
+  ),
+  Rsquared = c(
+    max(model_lm1$results$Rsquared), 
+    max(model_lm2$results$Rsquared), 
+    max(model_lm3$results$Rsquared), 
+    max(model_lm4$results$Rsquared)
+  )
+)
+
+# Print results table
+print(results)
+
+# Identify the best model
+best_model_index <- which.min(results$RMSE)
+best_model <- results$Model[best_model_index]
+print(paste("The best model is:", best_model))
+```
+
+```{r}
+# Feature Importance for the Best Model 
+lm_model <- model_lm1$finalModel
+importance_lm <- varImp(model_lm1, scale = FALSE)
+print(importance_lm)
+
+# Visualize Feature Importance
+ggplot(importance_lm, aes(x = reorder(Variables, Overall), y = Overall)) +
+  geom_bar(stat = "identity", fill = "lightgreen") +
+  coord_flip() +
+  labs(title = "Feature Importance for Linear Regression Model", 
+       x = "Feature", y = "Importance") +
+  theme_minimal()
+```
+
+```{r}
+# Ensure predictions and target are numeric vectors
+predictions_lm <- predict(lm_model, newdata = test_data)
+target_lm <- as.numeric(test_data$Chance.of.Admit)
+
+# Calculate Metrics
+rmse_lm <- RMSE(predictions_lm, target_lm)
+mae_lm <- MAE(predictions_lm, target_lm)
+rsquared_lm <- cor(predictions_lm, target_lm)^2  
+
+# Summarize Results
+results_lm <- data.frame(
+  Metric = c("RMSE", "MAE", "R^2"),
+  Linear_Regression = c(rmse_lm, mae_lm, rsquared_lm)
+)
+
+# Print Results
+print(results_lm)
+```
+
+
+
+# SVR Model
+The 3rd alternative regression model we used is the Support Vector Regression (SVR) Model, where the performance metrics are fixed as RSME, R2, MAE, and MAPE. Before evaluating, k-fold cross-validation is done and the best performing fold will be chosen as the best model to be evaluated. Via this model, the feature importance is computed based on permutation, also known as via evaluating the decrease in model performance when a feature's values are shuffled. 
+A bar chart is created to visualize the importance of each feature towards Chance of Admission too. 
+```{r}
+# k-fold
+train_control <- trainControl(method="cv", number=10)
+model_svr1 <- train(Chance.of.Admit~., data=train_data, trControl=train_control, method="svmRadial")
+
+# repeated K Fold
+train_control <- trainControl(method="repeatedcv", number=10, repeats=3)
+model_svr2 <- train(Chance.of.Admit~., data=train_data, trControl=train_control, method="svmRadial")
+
+# Leave one out CV
+train_control <- trainControl(method="LOOCV")
+model_svr3 <- train(Chance.of.Admit~., data=train_data, trControl=train_control, method="svmRadial")
+
+# bootstrap
+train_control <- trainControl(method="boot", number=100)
+model_svr4 <- train(Chance.of.Admit~., data=train_data, trControl=train_control, method="svmRadial")
+```
+
+This step compares the performance metrics 
+```{r}
+# Compare Performance Metrics
+results <- data.frame(
+  Model = c("k-fold", "Repeated k-fold", "LOOCV", "Bootstrap"),
+  RMSE = c(
+    min(model_svr1$results$RMSE), 
+    min(model_svr2$results$RMSE), 
+    min(model_svr3$results$RMSE), 
+    min(model_svr4$results$RMSE)
+  ),
+  Rsquared = c(
+    max(model_svr1$results$Rsquared), 
+    max(model_svr2$results$Rsquared), 
+    max(model_svr3$results$Rsquared), 
+    max(model_svr4$results$Rsquared)
+  )
+)
+
+# Print results table
+print(results)
+
+# Identify the best model
+best_model_index <- which.min(results$RMSE)
+best_model <- results$Model[best_model_index]
+print(paste("The best model is:", best_model))
+```
+
+The Best Model: 
+```{r}
+# Feature Importance for the Best Model 
+svr_model <- model_svr2$finalModel
+importance_svr <- varImp(model_svr2, scale = FALSE)
+print(importance_svr)
+
+# Verify variable names in importance output
+importance_svr$Variables <- rownames(importance_svr)
+
+# Visualize Feature Importance
+ggplot(importance_svr, aes(x = reorder(Variables, Overall), y = Overall)) +
+  geom_bar(stat = "identity", fill = "lightgreen") +
+  coord_flip() +
+  labs(title = "Feature Importance for Support Vector Regression (SVR) Model", 
+       x = "Feature", y = "Importance") +
+  theme_minimal()
+```
+
+A Feature Importance Plot is created to visualize the importance of the features, where CGPA is evaluated as the most important feature for the target variable, followed by Total_Score.
+
+```{r}
+# Ensure predictions and target are numeric vectors
+predictions_svr <- predict(model_svr2, newdata = test_data)
+target_svr <- as.numeric(test_data$Chance.of.Admit)
+
+# Calculate Metrics
+rmse_svr <- RMSE(predictions_svr, target_svr)
+mae_svr <- MAE(predictions_svr, target_svr)
+rsquared_svr <- ifelse(var(predictions_svr) > 0 && var(target_svr) > 0, cor(predictions_svr, target_svr)^2, NA)
+
+# Summarize Results
+results_svr <- data.frame(
+  Metric = c("RMSE", "MAE", "R^2"),
+  Support_Vector_Regression = c(rmse_svr, mae_svr, rsquared_svr)
+)
+
+# Print Results
+print(results_svr)
+```
+
+The interpretation of performance metrics: 
+1. R2 value of 0.7837 indicates that the model is able to explain about 78.4% of the variance in the target variable. This is a strong result. 
+2. The RMSE is 0.516, meaning the model's predictions, on average, are off by around 0.516 units. This value is relatively low, suggesting that the model has good predictive accuracy.
+3. An MAE of 0.378 means that, on average, the model's predictions are off by about 0.378 units.
+
+
+
+# Method 4: LightGBM Method
+```{r}
+library(gbm)
+# k-fold Cross Validation
+train_control <- trainControl(method = "cv", number = 10, verboseIter = FALSE)
+model_gbm1 <- train(Chance.of.Admit ~ ., data = train_data, trControl = train_control, method = "gbm", verbose = FALSE)
+
+# Repeated k-fold Cross Validation
+train_control <- trainControl(method = "repeatedcv", number = 10, repeats = 3, verboseIter = FALSE)
+model_gbm2 <- train(Chance.of.Admit ~ ., data = train_data, trControl = train_control, method = "gbm", verbose = FALSE)
+
+# Leave-One-Out Cross Validation
+train_control <- trainControl(method = "LOOCV")
+model_gbm3 <- train(Chance.of.Admit ~ ., data = train_data, trControl = train_control, method = "gbm", verbose = FALSE)
+
+# Bootstrap
+train_control <- trainControl(method = "boot", number = 100)
+model_gbm4 <- train(Chance.of.Admit ~ ., data = train_data, trControl = train_control, method = "gbm", verbose = FALSE)
+```
+
+```{r}
+# Compare Performance Metrics
+results <- data.frame(
+  Model = c("k-fold", "Repeated k-fold", "LOOCV", "Bootstrap"),
+  RMSE = c(
+    min(model_gbm1$results$RMSE), 
+    min(model_gbm2$results$RMSE), 
+    min(model_gbm3$results$RMSE), 
+    min(model_gbm4$results$RMSE)
+  ),
+  Rsquared = c(
+    max(model_gbm1$results$Rsquared), 
+    max(model_gbm2$results$Rsquared), 
+    max(model_gbm3$results$Rsquared), 
+    max(model_gbm4$results$Rsquared)
+  )
+)
+
+# Print results table
+print(results)
+```
+
+```{r}
+# Identify the best model based on RMSE
+best_model_index <- which.min(results$RMSE)
+best_model <- results$Model[best_model_index]
+print(paste("The best model is:", best_model))
+
+importance_gbm <- varImp(model_gbm1, scale = FALSE)
+print(importance_gbm)
+
+# Visualize Feature Importance
+ggplot(importance_gbm, aes(x = reorder(Variables, Overall), y = Overall)) +
+  geom_bar(stat = "identity", fill = "lightblue") +
+  coord_flip() +
+  labs(title = "Feature Importance for GBM Model", x = "Feature", y = "Importance") +
+  theme_minimal()
+```
+
+```{r}
+# Ensure predictions and target are numeric vectors for GBM
+predictions_gbm <- predict(model_gbm1, newdata = test_data)
+target_gbm <- as.numeric(test_data$Chance.of.Admit)
+
+# Calculate Metrics for GBM
+rmse_gbm <- RMSE(predictions_gbm, target_gbm)
+mae_gbm <- MAE(predictions_gbm, target_gbm)
+rsquared_gbm <- cor(predictions_gbm, target_gbm)^2  
+
+# Summarize Results for GBM
+results_gbm <- data.frame(
+  Metric = c("RMSE", "MAE", "R^2"),
+  Gradient_Boosting = c(rmse_gbm, mae_gbm, rsquared_gbm)
+)
+
+# Print Results for GBM
+print(results_gbm)
+```
+
+
+# Model Performance Evaluation (Summary Table)
+The last step is to store all the models' performance results in a summary table for comparison across all the metrics. 
+Besides, bar plots are created to visualize the performance comparison of the models too, which refers to Random Forest Model, Linear Regression Model, and SVR Model.
+Meanwhile, the selected performance metrics for comparison are RMSE, R2, MAE, and MAPE. 
+```{r}
+# Combine Results into a Table
+results_summary <- data.frame(
+  Model = c("Random Forest", "Linear Regression", "SVR"),
+  RMSE = c(rmse_rf, rmse_lm, rmse_svr),
+  R2 = c(r2_rf, r2_lm, r2_svr),
+  MAE = c(mae_rf, mae_lm, mae_svr),
+  MAPE = c(mape_rf, mape_lm, mape_svr)
+)
+print(results_summary)
+```
+
+```{r}
+# Create Bar Plot for RMSE Comparison
+par(mfrow=c(2, 2))  # Set up a 2x2 plot layout
+barplot(results_summary$RMSE,
+        names.arg = results_summary$Model,
+        las = 2, col = "lightblue",
+        main = "RMSE Comparison of Models",
+        xlab = "Model", ylab = "RMSE",
+        cex.names = 0.8)
+
+# Create Bar Plot for R^2 Comparison
+barplot(results_summary$R2,
+        names.arg = results_summary$Model,
+        las = 2, col = "lightgreen",
+        main = "R^2 Comparison of Models",
+        xlab = "Model", ylab = "R^2",
+        cex.names = 0.8)
+
+# Create Bar Plot for MAE Comparison
+barplot(results_summary$MAE,
+        names.arg = results_summary$Model,
+        las = 2, col = "lightcoral",
+        main = "MAE Comparison of Models",
+        xlab = "Model", ylab = "MAE",
+        cex.names = 0.8)
+
+# Create Bar Plot for MAPE Comparison
+barplot(results_summary$MAPE,
+        names.arg = results_summary$Model,
+        las = 2, col = "lightyellow",
+        main = "MAPE Comparison of Models",
+        xlab = "Model", ylab = "MAPE",
+        cex.names = 0.8)
+```
+
+As visualized, in general all model perform well with close value in all the metrics of RMSE, R2, MAE, and MAPE. 
+However, for R2 value, Random Forest Model shows the best performance with the highest value. For RSME and MAE, Linear Regression Model and SVR Model perform the best with the lowest value, indicating strong accuracy in predicting power, and is closely followed by Random Forest Model. 
+
+Hence, in conclusion, Random Forest Model is selected as the best model among all the regression models. 
+
+
+# Conclusion
